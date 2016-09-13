@@ -53,10 +53,11 @@ angular.module('blocktrail.wallet')
             $btBackButtonDelegate.setHardwareBackButton($btBackButtonDelegate._default);
         };
     })
-    .controller('SetupStartCtrl', function($scope, $state) {
+    .controller('SetupStartCtrl', function($scope, $http, CONFIG, $state, $q, blocktrailLocalisation) {
         $scope.slider = {
             displayed: 0
         };
+
         $scope.newAccount = function() {
             $state.go('app.setup.register');
         };
@@ -179,19 +180,27 @@ angular.module('blocktrail.wallet')
                             }
                         })
                         .then(function(secretData) {
-                            return launchService.storeAccountInfo(_.merge({}, {secret: secretData.secret, encrypted_secret: secretData.encrypted_secret, new_secret: newSecret}, result.data)).then(function() {
+                            return launchService.storeAccountInfo(_.merge({}, {
+                                secret: secretData.secret, 
+                                encrypted_secret: secretData.encrypted_secret, 
+                                new_secret: newSecret
+                            }, result.data)).then(function() {
                                 $log.debug('existing_wallet', result.data.existing_wallet);
                                 $scope.setupInfo.password = $scope.form.password;
                                 $scope.setupInfo.identifier = result.data.existing_wallet || $scope.setupInfo.identifier;
                                 $scope.message = {title: 'SUCCESS', title_class: 'text-good', body: ''};
 
                                 //save the default settings and do a profile sync
-                                settingsService.username = $scope.form.username;
-                                settingsService.displayName = $scope.form.username;
+                                settingsService.username = $scope.form.username || result.data.username;
+                                settingsService.displayName = $scope.form.username || result.data.username;
                                 settingsService.enableContacts = false;
-                                settingsService.email = $scope.form.email;
+                                settingsService.email = $scope.form.email || result.data.email;
                                 settingsService.$store().then(function() {
-                                    settingsService.$syncProfileDown();
+                                    settingsService.$syncProfileDown().then(function() {
+                                        return settingsService.$syncSettingsDown();
+                                    });
+
+                                    // continue after 400ms without waiting for the syncing
                                     $timeout(function() {
                                         $scope.dismissMessage();
                                         $timeout(function() {
